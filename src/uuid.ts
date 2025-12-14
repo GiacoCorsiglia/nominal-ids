@@ -11,42 +11,11 @@ const HEX_CHARS = "0123456789abcdef";
 const BASE32_DECODE = new Uint8Array(128);
 BASE32_DECODE.fill(0xff); // Mark all as invalid by default
 
-// Map '0'-'9' (ASCII 48-57) to values 0-9
-for (let i = 0; i < 10; i++) {
-	BASE32_DECODE[48 + i] = i;
-}
-
-// Map 'a'-'z' (ASCII 97-122) to their base32 values
-// Note: Crockford excludes i, l, o, u
-const lowerMap: Record<string, number> = {
-	a: 10,
-	b: 11,
-	c: 12,
-	d: 13,
-	e: 14,
-	f: 15,
-	g: 16,
-	h: 17,
-	j: 18,
-	k: 19,
-	m: 20,
-	n: 21,
-	p: 22,
-	q: 23,
-	r: 24,
-	s: 25,
-	t: 26,
-	v: 27,
-	w: 28,
-	x: 29,
-	y: 30,
-	z: 31,
-};
-
-for (const [char, value] of Object.entries(lowerMap)) {
-	const code = char.charCodeAt(0);
-	BASE32_DECODE[code] = value; // lowercase
-	BASE32_DECODE[code - 32] = value; // uppercase (ASCII offset)
+// Build lookup from alphabet (includes 0-9 and a-z, excluding i, l, o, u)
+for (let i = 0; i < BASE32_ALPHABET.length; i++) {
+	const lower = BASE32_ALPHABET.charCodeAt(i);
+	BASE32_DECODE[lower] = i; // lowercase
+	BASE32_DECODE[lower - 32] = i; // uppercase (ASCII offset: 'A' = 'a' - 32)
 }
 
 /**
