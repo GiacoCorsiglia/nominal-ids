@@ -3,73 +3,184 @@ import { Id, stringify } from "./id.ts";
 // Crockford base32 alphabet (lowercase)
 const BASE32_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
 
-// Build reverse lookup map for decoding
-const BASE32_DECODE_MAP = new Map<string, number>();
-for (let i = 0; i < BASE32_ALPHABET.length; i++) {
-	const char = BASE32_ALPHABET[i]!;
-	BASE32_DECODE_MAP.set(char, i);
-	// Also support uppercase for decoding
-	BASE32_DECODE_MAP.set(char.toUpperCase(), i);
+// Hex character lookup for efficient byte to hex conversion
+const HEX_CHARS = "0123456789abcdef";
+
+// Uint8Array lookup table for base32 decoding
+// Maps ASCII char codes to base32 values (0-31) or 0xff for invalid chars
+const BASE32_DECODE = new Uint8Array(128);
+BASE32_DECODE.fill(0xff); // Mark all as invalid by default
+
+// Map '0'-'9' (ASCII 48-57) to values 0-9
+for (let i = 0; i < 10; i++) {
+	BASE32_DECODE[48 + i] = i;
+}
+
+// Map 'a'-'z' (ASCII 97-122) to their base32 values
+// Note: Crockford excludes i, l, o, u
+const lowerMap: Record<string, number> = {
+	a: 10,
+	b: 11,
+	c: 12,
+	d: 13,
+	e: 14,
+	f: 15,
+	g: 16,
+	h: 17,
+	j: 18,
+	k: 19,
+	m: 20,
+	n: 21,
+	p: 22,
+	q: 23,
+	r: 24,
+	s: 25,
+	t: 26,
+	v: 27,
+	w: 28,
+	x: 29,
+	y: 30,
+	z: 31,
+};
+
+for (const [char, value] of Object.entries(lowerMap)) {
+	const code = char.charCodeAt(0);
+	BASE32_DECODE[code] = value; // lowercase
+	BASE32_DECODE[code - 32] = value; // uppercase (ASCII offset)
 }
 
 /**
- * Encode a UUID hex string to base32 (Crockford alphabet).
- * Input: 32 hex chars (e.g., "0188bac7a64e7a51843c441ad1d9cbc6")
- * Output: 26 base32 chars
+ * Parse a hyphenated UUID hex string to a 16-byte Uint8Array.
+ * Input: "0188bac7-a64e-7a51-843c-441ad1d9cbc6" (36 chars)
+ * Output: Uint8Array(16)
  */
-function hexToBase32(hex: string): string {
-	// Remove any hyphens from UUID format
-	hex = hex.replace(/-/g, "");
+function parseUuidHex(uuid: string): Uint8Array {
+	const bytes = new Uint8Array(16);
+	let byteIndex = 0;
 
-	// Convert hex to BigInt for easier bit manipulation
-	const num = BigInt(`0x${hex}`);
+	// Process in chunks, skipping hyphens at positions 8, 13, 18, 23
+	for (let i = 0; i < uuid.length; i += 2) {
+		// Skip hyphens
+		if (uuid[i] === "-") {
+			i--;
+			continue;
+		}
 
-	// Convert to base32 - UUID is 128 bits, which gives us 26 base32 chars
-	let result = "";
-	let remaining = num;
-
-	for (let i = 0; i < 26; i++) {
-		const digit = Number(remaining & 31n); // Get last 5 bits
-		result = BASE32_ALPHABET[digit] + result;
-		remaining = remaining >> 5n;
+		const hex = uuid.slice(i, i + 2);
+		bytes[byteIndex++] = Number.parseInt(hex, 16);
 	}
 
-	return result;
+	return bytes;
 }
 
 /**
- * Add hyphens to a 32-char hex string to create standard UUID format.
- * Input: "0188bac7a64e7a51843c441ad1d9cbc6"
- * Output: "0188bac7-a64e-7a51-843c-441ad1d9cbc6"
+ * Convert a 16-byte Uint8Array to a hyphenated UUID hex string.
+ * Input: Uint8Array(16)
+ * Output: "0188bac7-a64e-7a51-843c-441ad1d9cbc6" (36 chars)
+ *
+ * Optimized to build the string directly without intermediate allocations.
  */
-function addHyphens(hex: string): string {
-	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+function formatUuidHex(bytes: Uint8Array): string {
+	// Pre-allocate array for 32 hex chars + 4 hyphens
+	const result = new Array(36);
+	let resultIndex = 0;
+
+	for (let i = 0; i < 16; i++) {
+		// Add hyphen after bytes 4, 6, 8, 10 (positions 8, 13, 18, 23)
+		if (i === 4 || i === 6 || i === 8 || i === 10) {
+			result[resultIndex++] = "-";
+		}
+
+		const byte = bytes[i]!;
+		// Convert byte to two hex characters using lookup table
+		result[resultIndex++] = HEX_CHARS[byte >> 4];
+		result[resultIndex++] = HEX_CHARS[byte & 0x0f];
+	}
+
+	return result.join("");
 }
 
 /**
- * Decode a base32 string to UUID hex string with hyphens.
+ * Encode a 16-byte Uint8Array to base32 (Crockford alphabet).
+ * Input: Uint8Array(16)
+ * Output: 26 base32 chars
+ *
+ * Base32 encoding produces 130 bits (26 × 5), with 2 leading zero bits
+ * followed by the 128-bit UUID.
+ */
+function encodeBase32(bytes: Uint8Array): string {
+	if (bytes.length !== 16) {
+		throw new Error(`Invalid length. Expected 16 bytes, got ${bytes.length}`);
+	}
+
+	const result: string[] = new Array(26);
+	let resultIndex = 0;
+
+	// Start with 2 zero bits in buffer (to make 130 bits total)
+	let bitBuffer = 0;
+	let bitsInBuffer = 2;
+
+	for (let i = 0; i < bytes.length; i++) {
+		// Add byte to buffer
+		bitBuffer = (bitBuffer << 8) | bytes[i]!;
+		bitsInBuffer += 8;
+
+		// Extract 5-bit chunks
+		while (bitsInBuffer >= 5) {
+			bitsInBuffer -= 5;
+			const index = (bitBuffer >> bitsInBuffer) & 31;
+			result[resultIndex++] = BASE32_ALPHABET[index]!;
+		}
+	}
+
+	return result.join("");
+}
+
+/**
+ * Decode a base32 string to a 16-byte Uint8Array.
  * Input: 26 base32 chars
- * Output: 36 hex chars with hyphens (lowercase)
+ * Output: Uint8Array(16)
+ *
+ * Base32 decoding consumes 130 bits (26 × 5), discarding the 2 leading zero bits
+ * to get the 128-bit UUID.
  */
-function base32ToHex(base32: string): string {
+function decodeBase32(base32: string): Uint8Array {
 	if (base32.length !== 26) {
 		throw new Error(`Invalid base32 UUID length: ${base32.length} (expected 26)`);
 	}
 
-	let num = 0n;
+	const bytes = new Uint8Array(16);
+	let bitBuffer = 0;
+	let bitsInBuffer = 0;
+	let byteIndex = 0;
+
 	for (let i = 0; i < base32.length; i++) {
-		// char necessarily exists.
-		const char = base32[i]!;
-		const digit = BASE32_DECODE_MAP.get(char);
-		if (digit === undefined) {
-			throw new Error(`Invalid base32 character: ${char}`);
+		const charCode = base32.charCodeAt(i);
+		const value = charCode < 128 ? BASE32_DECODE[charCode] : 0xff;
+
+		if (value === undefined || value === 0xff) {
+			throw new Error(`Invalid base32 character: ${base32[i]}`);
 		}
-		num = (num << 5n) | BigInt(digit);
+
+		// Add 5 bits to buffer
+		bitBuffer = (bitBuffer << 5) | value;
+		bitsInBuffer += 5;
+
+		// Skip the first 2 bits (from first character)
+		if (i === 0) {
+			// First char contributes 5 bits, but we skip 2, leaving 3
+			bitsInBuffer = 3;
+			bitBuffer &= 0x07; // Keep only bottom 3 bits
+		}
+
+		// Extract complete bytes
+		while (bitsInBuffer >= 8) {
+			bitsInBuffer -= 8;
+			bytes[byteIndex++] = (bitBuffer >> bitsInBuffer) & 0xff;
+		}
 	}
 
-	// Convert to hex, pad to 32 chars, then add hyphens
-	const hex = num.toString(16).padStart(32, "0");
-	return addHyphens(hex);
+	return bytes;
 }
 
 export class Uuid extends Id {
@@ -87,7 +198,8 @@ export class Uuid extends Id {
 			hexKey = key.toLowerCase();
 		} else if (key.length === 26) {
 			// It's base32 - convert to hyphenated hex
-			hexKey = base32ToHex(key);
+			const bytes = decodeBase32(key);
+			hexKey = formatUuidHex(bytes);
 		} else {
 			throw new Error(`Invalid UUID format: ${key}`);
 		}
@@ -97,9 +209,12 @@ export class Uuid extends Id {
 	}
 
 	override toString(): string {
-		// Convert hex key to base32
-		const base32 = this.base32 ?? (this.base32 = hexToBase32(this.key));
+		// Convert hex key to base32 (cached)
+		if (!this.base32) {
+			const bytes = parseUuidHex(this.key);
+			this.base32 = encodeBase32(bytes);
+		}
 		// Add tag prefix if present
-		return stringify(base32, this.tag);
+		return stringify(this.base32, this.tag);
 	}
 }
