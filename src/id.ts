@@ -33,8 +33,16 @@ type TaggedIdCls<Tag extends string> = typeof TaggedId<Tag> & TaggedIdStatic<Tag
 export const stringify = (key: IdValue, tag?: string): string => (tag ? `${tag}_${key}` : `${key}`);
 
 const caches = new WeakMap<typeof Id, Map<IdValue, WeakRef<Id>>>();
-const registry = new FinalizationRegistry<{ cls: typeof Id; key: IdValue }>(({ cls, key }) =>
-	caches.get(cls)?.delete(key),
+const registry = new FinalizationRegistry<{ cls: typeof Id; key: IdValue; ref: WeakRef<Id> }>(
+	({ cls, key, ref }) => {
+		// Ensure the WeakRef was not overwritten before finalization.  This is
+		// possible because WeakRef.deref() might return `undefined` at some time
+		// before this finalization callback is called.
+		const cache = caches.get(cls);
+		if (cache?.get(key) === ref) {
+			cache.delete(key);
+		}
+	},
 );
 
 export class Id {
@@ -59,14 +67,15 @@ export class Id {
 			caches.set(this, (cache = new Map()));
 		}
 
-		const cached = cache.get(cacheKey)?.deref() as T["prototype"] | undefined;
+		const cached = cache.get(cacheKey)?.deref();
 		if (cached) {
 			return cached;
 		}
 
 		const id = new this(key, tag);
-		cache.set(cacheKey, new WeakRef(id));
-		registry.register(id, { cls: this, key: cacheKey });
+		const ref = new WeakRef(id);
+		cache.set(cacheKey, ref);
+		registry.register(id, { cls: this, key: cacheKey, ref });
 		return id;
 	}
 
