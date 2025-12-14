@@ -30,7 +30,7 @@ interface TaggedIdStatic<Tag extends string> {
 
 type TaggedIdCls<Tag extends string> = typeof TaggedId<Tag> & TaggedIdStatic<Tag>;
 
-const stringify = (key: IdValue, tag?: string): string => (tag ? `${tag}_${key}` : `${key}`);
+export const stringify = (key: IdValue, tag?: string): string => (tag ? `${tag}_${key}` : `${key}`);
 
 const caches = new WeakMap<typeof Id, Map<IdValue, WeakRef<Id>>>();
 const registry = new FinalizationRegistry<{ cls: typeof Id; key: IdValue }>(({ cls, key }) =>
