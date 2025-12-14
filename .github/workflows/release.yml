@@ -1,0 +1,35 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write # Required for OIDC.
+  contents: write # Required for release notes.
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: 'package.json'
+          cache: "npm"
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm publish --access public
+
+      - run: npx changelogithub@14
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
