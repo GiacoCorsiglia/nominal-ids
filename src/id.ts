@@ -58,9 +58,7 @@ export class Id {
 
 	static from<T extends typeof Id>(this: T, key: IdValue, tag?: string): T["prototype"] {
 		// We don't need the tag as part of the cache key when the class has a
-		// tag, since it's the same for all instances of the class.  Also, in this
-		// case we intentionally ignore everything but the first argument so that
-		// you can safely write `[].map(UserId.from)`.
+		// tag, since it's the same for all instances of the class.
 		const cacheKey = this.tag ? key : stringify(key, tag);
 		let cache = caches.get(this);
 		if (!cache) {
