@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { InvalidBase32CharacterError, InvalidUuidError } from "./errors.ts";
 import { Uuid } from "./uuid.ts";
 
 class UserId extends Uuid.For("user") {}
@@ -8,12 +9,36 @@ class PostId extends Uuid.For("post") {}
 
 // Test vectors for edge cases and encoding correctness
 const validCases = [
-	{ name: "nil", base32: "00000000000000000000000000", uuid: "00000000-0000-0000-0000-000000000000" },
-	{ name: "one", base32: "00000000000000000000000001", uuid: "00000000-0000-0000-0000-000000000001" },
-	{ name: "ten", base32: "0000000000000000000000000a", uuid: "00000000-0000-0000-0000-00000000000a" },
-	{ name: "sixteen", base32: "0000000000000000000000000g", uuid: "00000000-0000-0000-0000-000000000010" },
-	{ name: "thirty-two", base32: "00000000000000000000000010", uuid: "00000000-0000-0000-0000-000000000020" },
-	{ name: "max-valid", base32: "7zzzzzzzzzzzzzzzzzzzzzzzzz", uuid: "ffffffff-ffff-ffff-ffff-ffffffffffff" },
+	{
+		name: "nil",
+		base32: "00000000000000000000000000",
+		uuid: "00000000-0000-0000-0000-000000000000",
+	},
+	{
+		name: "one",
+		base32: "00000000000000000000000001",
+		uuid: "00000000-0000-0000-0000-000000000001",
+	},
+	{
+		name: "ten",
+		base32: "0000000000000000000000000a",
+		uuid: "00000000-0000-0000-0000-00000000000a",
+	},
+	{
+		name: "sixteen",
+		base32: "0000000000000000000000000g",
+		uuid: "00000000-0000-0000-0000-000000000010",
+	},
+	{
+		name: "thirty-two",
+		base32: "00000000000000000000000010",
+		uuid: "00000000-0000-0000-0000-000000000020",
+	},
+	{
+		name: "max-valid",
+		base32: "7zzzzzzzzzzzzzzzzzzzzzzzzz",
+		uuid: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+	},
 	{
 		name: "valid-alphabet",
 		base32: "0123456789abcdefghjkmnpqrs",
@@ -60,6 +85,46 @@ test("Uuid.toJSON returns base32", () => {
 test("Uuid.toPostgres returns hex", () => {
 	const uuid = Uuid.from(testHexWithHyphens);
 	assert.equal(uuid.toPostgres(), testHexWithHyphens);
+});
+
+test("Uuid.toHex returns hex with hyphens", () => {
+	const uuid = Uuid.from(testHexWithHyphens);
+	assert.equal(uuid.toHex(), testHexWithHyphens);
+});
+
+test("Uuid.toHex from base32 returns hex with hyphens", () => {
+	const uuid = Uuid.from(testBase32);
+	assert.equal(uuid.toHex(), testHexWithHyphens);
+});
+
+test("Uuid.toBase32 returns base32 string", () => {
+	const uuid = Uuid.from(testHexWithHyphens);
+	assert.equal(uuid.toBase32(), testBase32);
+});
+
+test("Uuid.toBase32 from base32 returns same base32", () => {
+	const uuid = Uuid.from(testBase32);
+	assert.equal(uuid.toBase32(), testBase32);
+});
+
+test("Uuid.toBase32 caches result", () => {
+	const uuid = Uuid.from(testHexWithHyphens);
+	const first = uuid.toBase32();
+	const second = uuid.toBase32();
+	assert.equal(first, second);
+	assert.equal(first, testBase32);
+});
+
+test("Uuid.fromLowerCaseHex accepts lowercase hex", () => {
+	const uuid = Uuid.fromLowerCaseHex(testHexWithHyphens);
+	assert.equal(uuid.key, testHexWithHyphens);
+	assert.equal(uuid.toHex(), testHexWithHyphens);
+});
+
+test("Uuid.fromLowerCaseHex returns interned instance", () => {
+	const a = Uuid.fromLowerCaseHex(testHexWithHyphens);
+	const b = Uuid.from(testHexWithHyphens);
+	assert.equal(a, b);
 });
 
 test("UserId.from with tag", () => {
@@ -110,24 +175,16 @@ test("UserId instances are interned", () => {
 });
 
 test("Invalid hex UUID throws error", () => {
-	assert.throws(() => Uuid.from("not-a-uuid"), {
-		message: /Invalid UUID format/,
-	});
+	assert.throws(() => Uuid.from("not-a-uuid"), InvalidUuidError);
 });
 
 test("Invalid base32 UUID throws error", () => {
-	assert.throws(() => Uuid.from("invalid_base32_string_length"), {
-		message: /Invalid UUID format/,
-	});
+	assert.throws(() => Uuid.from("invalid_base32_string_length"), InvalidUuidError);
 });
 
 test("Base32 with invalid characters throws error", () => {
-	// 'L' (uppercase) is not in the base32 alphabet, but we support uppercase decoding
-	// so this test actually verifies that 'L' is treated as lowercase 'l'
-	// Instead, test with a character that's truly invalid like 'u' (not in Crockford)
-	assert.throws(() => Uuid.from("0c5pavn4ts6t2g1s891kest9su"), {
-		message: /Invalid base32 character|Invalid UUID format/,
-	});
+	// 'u' is not in the Crockford base32 alphabet
+	assert.throws(() => Uuid.from("0c5pavn4ts6t2g1s891kest9su"), InvalidBase32CharacterError);
 });
 
 test("Round trip hex to base32 to hex", () => {

@@ -1,4 +1,5 @@
-import { Id, stringify } from "./id.ts";
+import { InvalidBase32CharacterError, InvalidUuidError } from "./errors.ts";
+import { type TaggedIdStatic, type TaggedId, Id, stringify } from "./id.ts";
 
 // Crockford base32 alphabet (lowercase)
 const BASE32_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
@@ -28,7 +29,8 @@ function parseUuidHex(uuid: string): Uint8Array {
 	let byteIndex = 0;
 
 	// Process in chunks, skipping hyphens at positions 8, 13, 18, 23
-	for (let i = 0; i < uuid.length; i += 2) {
+	// It must be true that uuid.length === 36.
+	for (let i = 0; i < 36; i += 2) {
 		// Skip hyphens
 		if (uuid[i] === "-") {
 			i--;
@@ -36,7 +38,7 @@ function parseUuidHex(uuid: string): Uint8Array {
 		}
 
 		const hex = uuid.slice(i, i + 2);
-		bytes[byteIndex++] = Number.parseInt(hex, 16);
+		bytes[byteIndex++] = parseInt(hex, 16);
 	}
 
 	return bytes;
@@ -78,10 +80,6 @@ function formatUuidHex(bytes: Uint8Array): string {
  * followed by the 128-bit UUID.
  */
 function encodeBase32(bytes: Uint8Array): string {
-	if (bytes.length !== 16) {
-		throw new Error(`Invalid length. Expected 16 bytes, got ${bytes.length}`);
-	}
-
 	const result: string[] = new Array(26);
 	let resultIndex = 0;
 
@@ -89,7 +87,8 @@ function encodeBase32(bytes: Uint8Array): string {
 	let bitBuffer = 0;
 	let bitsInBuffer = 2;
 
-	for (let i = 0; i < bytes.length; i++) {
+	// It must be true that bytes.length === 16.
+	for (let i = 0; i < 16; i++) {
 		// Add byte to buffer
 		bitBuffer = (bitBuffer << 8) | bytes[i]!;
 		bitsInBuffer += 8;
@@ -114,21 +113,18 @@ function encodeBase32(bytes: Uint8Array): string {
  * to get the 128-bit UUID.
  */
 function decodeBase32(base32: string): Uint8Array {
-	if (base32.length !== 26) {
-		throw new Error(`Invalid base32 UUID length: ${base32.length} (expected 26)`);
-	}
-
 	const bytes = new Uint8Array(16);
 	let bitBuffer = 0;
 	let bitsInBuffer = 0;
 	let byteIndex = 0;
 
-	for (let i = 0; i < base32.length; i++) {
+	// It must be true that base32.length === 26.
+	for (let i = 0; i < 26; i++) {
 		const charCode = base32.charCodeAt(i);
-		const value = charCode < 128 ? BASE32_DECODE[charCode] : 0xff;
+		const value = BASE32_DECODE[charCode] ?? 0xff;
 
-		if (value === undefined || value === 0xff) {
-			throw new Error(`Invalid base32 character: ${base32[i]}`);
+		if (value === 0xff) {
+			throw new InvalidBase32CharacterError(base32[i]!);
 		}
 
 		// Add 5 bits to buffer
@@ -152,6 +148,17 @@ function decodeBase32(base32: string): Uint8Array {
 	return bytes;
 }
 
+declare abstract class TaggedUuid<Tag extends string> extends TaggedId<Tag> implements Uuid {
+	toHex(): string;
+	toBase32(): string;
+}
+
+interface TaggedUuidStatic<Tag extends string> extends TaggedIdStatic<Tag> {
+	readonly prototype: TaggedUuid<Tag>;
+}
+
+type TaggedUuidCls<Tag extends string> = typeof TaggedUuid<Tag> & TaggedUuidStatic<Tag>;
+
 export class Uuid extends Id {
 	// The key is inherited from Id but is always a string (hyphenated hex UUID, 36 chars)
 	declare readonly key: string;
@@ -163,27 +170,44 @@ export class Uuid extends Id {
 		let hexKey: string;
 
 		if (key.length === 36) {
-			// It's hex with hyphens - normalize to lowercase (keep hyphens)
+			// It's hex with hyphens - normalize to lowercase (keep hyphens).
 			hexKey = key.toLowerCase();
 		} else if (key.length === 26) {
-			// It's base32 - convert to hyphenated hex
+			// It's base32 - convert to hyphenated hex.
 			const bytes = decodeBase32(key);
 			hexKey = formatUuidHex(bytes);
 		} else {
-			throw new Error(`Invalid UUID format: ${key}`);
+			throw new InvalidUuidError(key);
 		}
 
 		// Call the parent from() with the hyphenated hex key
 		return super.from(hexKey, tag);
 	}
 
+	/**
+	 * Fast path for parsing a lower case hex UUID with hyphens, as returned by Postgres.
+	 */
+	static fromLowerCaseHex<T extends typeof Id>(this: T, lowerCaseHex: string): T["prototype"] {
+		return this.from(lowerCaseHex);
+	}
+
+	// Redeclare this method to give it the right types.
+	declare static For: <Tag extends string>(tag: Tag) => TaggedUuidCls<Tag>;
+
 	override toString(): string {
+		return stringify(this.toBase32(), this.tag);
+	}
+
+	toHex(): string {
+		return this.key;
+	}
+
+	toBase32(): string {
 		// Convert hex key to base32 (cached)
 		if (!this.base32) {
 			const bytes = parseUuidHex(this.key);
 			this.base32 = encodeBase32(bytes);
 		}
-		// Add tag prefix if present
-		return stringify(this.base32, this.tag);
+		return this.base32;
 	}
 }

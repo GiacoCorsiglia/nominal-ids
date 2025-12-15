@@ -3,7 +3,7 @@ import { InvalidTagError } from "./errors.ts";
 type IdValue = string | number | bigint;
 
 // This is not a real class!  It's just here to help with typing.
-declare abstract class TaggedId<Tag extends string> implements Id {
+export declare abstract class TaggedId<Tag extends string> implements Id {
 	readonly tag: Tag;
 	readonly key: string;
 
@@ -13,7 +13,7 @@ declare abstract class TaggedId<Tag extends string> implements Id {
 }
 
 // This needs to be its own interface because we want to use the `Tag` type parameter.
-interface TaggedIdStatic<Tag extends string> {
+export interface TaggedIdStatic<Tag extends string> {
 	readonly prototype: TaggedId<Tag>;
 
 	readonly tag: Tag;
