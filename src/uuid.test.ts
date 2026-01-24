@@ -1,50 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { toMixedCase, uuidEdgeCases, uuidRandomCases, uuidv7Cases } from "./__test__/fixtures.ts";
 import { InvalidBase32CharacterError, InvalidUuidError } from "./errors.ts";
 import { Uuid } from "./uuid.ts";
 
 class UserId extends Uuid.For("user") {}
 class PostId extends Uuid.For("post") {}
-
-// Test vectors for edge cases and encoding correctness
-const validCases = [
-	{
-		name: "nil",
-		base32: "00000000000000000000000000",
-		uuid: "00000000-0000-0000-0000-000000000000",
-	},
-	{
-		name: "one",
-		base32: "00000000000000000000000001",
-		uuid: "00000000-0000-0000-0000-000000000001",
-	},
-	{
-		name: "ten",
-		base32: "0000000000000000000000000a",
-		uuid: "00000000-0000-0000-0000-00000000000a",
-	},
-	{
-		name: "sixteen",
-		base32: "0000000000000000000000000g",
-		uuid: "00000000-0000-0000-0000-000000000010",
-	},
-	{
-		name: "thirty-two",
-		base32: "00000000000000000000000010",
-		uuid: "00000000-0000-0000-0000-000000000020",
-	},
-	{
-		name: "max-valid",
-		base32: "7zzzzzzzzzzzzzzzzzzzzzzzzz",
-		uuid: "ffffffff-ffff-ffff-ffff-ffffffffffff",
-	},
-	{
-		name: "valid-alphabet",
-		base32: "0123456789abcdefghjkmnpqrs",
-		uuid: "0110c853-1d09-52d8-d73e-1194e95b5f19",
-	},
-];
 
 // Test UUID: 0188bac7-a64e-7a51-843c-441ad1d9cbc6
 const testHexWithHyphens = "0188bac7-a64e-7a51-843c-441ad1d9cbc6"; // Postgres format (the key)
@@ -200,23 +162,54 @@ test("Supports uppercase base32 decoding", () => {
 	assert.equal(uuid.key, testHexWithHyphens);
 });
 
-// Test vectors for edge cases
-for (const { name, base32, uuid } of validCases) {
+// Comprehensive test suite using all fixtures
+for (const [name, cases] of [
+	["Edge cases", uuidEdgeCases],
+	["Random UUIDs", uuidRandomCases],
+	["UUIDv7 cases", uuidv7Cases],
+] as const) {
 	test(`${name} - decode base32 to UUID`, () => {
-		const result = Uuid.from(base32);
-		assert.equal(result.key, uuid);
+		for (const [uuid, base32] of Object.entries(cases)) {
+			const result = Uuid.from(base32);
+			assert.equal(result.key, uuid, `Failed for base32: ${base32}`);
+		}
 	});
 
 	test(`${name} - encode UUID to base32`, () => {
-		const result = Uuid.from(uuid);
-		assert.equal(result.toString(), base32);
+		for (const [uuid, base32] of Object.entries(cases)) {
+			const result = Uuid.from(uuid);
+			assert.equal(result.toString(), base32, `Failed for UUID: ${uuid}`);
+		}
 	});
 
 	test(`${name} - round trip`, () => {
-		const fromBase32 = Uuid.from(base32);
-		const fromUuid = Uuid.from(uuid);
-		assert.equal(fromBase32, fromUuid);
-		assert.equal(fromBase32.toString(), base32);
-		assert.equal(fromUuid.toString(), base32);
+		for (const [uuid, base32] of Object.entries(cases)) {
+			const fromBase32 = Uuid.from(base32);
+			const fromUuid = Uuid.from(uuid);
+			assert.equal(fromBase32, fromUuid, `Failed round trip for ${uuid}`);
+			assert.equal(fromBase32.toString(), base32, `Failed base32 for ${uuid}`);
+			assert.equal(fromUuid.toString(), base32, `Failed base32 for ${uuid}`);
+		}
+	});
+
+	test(`${name} - uppercase base32`, () => {
+		for (const [uuid, base32] of Object.entries(cases)) {
+			const result = Uuid.from(base32.toUpperCase());
+			assert.equal(result.key, uuid, `Failed for uppercase base32: ${base32}`);
+			assert.equal(result.toString(), base32, `Failed encoding for uppercase base32: ${base32}`);
+		}
+	});
+
+	test(`${name} - mixed case base32`, () => {
+		for (const [uuid, base32] of Object.entries(cases)) {
+			const mixedCase = toMixedCase(base32);
+			const result = Uuid.from(mixedCase);
+			assert.equal(result.key, uuid, `Failed for mixed case base32: ${mixedCase}`);
+			assert.equal(
+				result.toString(),
+				base32,
+				`Failed encoding for mixed case base32: ${mixedCase}`,
+			);
+		}
 	});
 }
