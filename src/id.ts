@@ -2,6 +2,8 @@ import { InvalidTagError } from "./errors.ts";
 
 type IdValue = string | number | bigint;
 
+const inspectSymbol: symbol = Symbol.for("nodejs.util.inspect.custom");
+
 // This is not a real class!  It's just here to help with typing.
 export declare abstract class TaggedId<Tag extends string> implements Id {
 	readonly tag: Tag;
@@ -10,6 +12,7 @@ export declare abstract class TaggedId<Tag extends string> implements Id {
 	toJSON(): string;
 	toPostgres(): string;
 	[Symbol.toStringTag]: string;
+	[inspectSymbol](): string;
 }
 
 // This needs to be its own interface because we want to use the `Tag` type parameter.
@@ -118,7 +121,7 @@ export class Id {
 		return this.toString();
 	}
 
-	[Symbol.for("nodejs.util.inspect.custom")](): string {
+	[inspectSymbol](): string {
 		return `${this.constructor.name}(${this.toString()})`;
 	}
 
