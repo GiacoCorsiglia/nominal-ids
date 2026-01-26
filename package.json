@@ -29,7 +29,8 @@
   "scripts": {
     "build": "tsdown",
     "release": "./scripts/release.sh",
-    "test": "node --test",
+    "test": "cd src && node --test",
+    "test:sql": "cd sql && node --test",
     "typecheck": "tsgo",
     "typecheck:tsc": "tsc",
     "lint": "oxlint",
@@ -42,9 +43,11 @@
   },
   "devDependencies": {
     "@types/node": "^22",
+    "@types/pg": "^8.11.10",
     "@typescript/native-preview": "^7.0.0-dev.20251207.1",
     "oxfmt": "^0.16.0",
     "oxlint": "^1.31.0",
+    "pg": "^8.13.1",
     "tsdown": "^0.17.1",
     "typescript": "^5.9.3"
   }
