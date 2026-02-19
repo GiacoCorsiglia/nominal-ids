@@ -257,15 +257,31 @@ for (const [name, cases] of [
 
 	test(`${name} - uuidToBase32 is case insensitive`, () => {
 		for (const [uuid, base32] of Object.entries(cases)) {
-			assert.equal(uuidToBase32(uuid.toUpperCase()), base32, `uuidToBase32 uppercase failed for ${uuid}`);
-			assert.equal(uuidToBase32(toMixedCase(uuid)), base32, `uuidToBase32 mixed case failed for ${uuid}`);
+			assert.equal(
+				uuidToBase32(uuid.toUpperCase()),
+				base32,
+				`uuidToBase32 uppercase failed for ${uuid}`,
+			);
+			assert.equal(
+				uuidToBase32(toMixedCase(uuid)),
+				base32,
+				`uuidToBase32 mixed case failed for ${uuid}`,
+			);
 		}
 	});
 
 	test(`${name} - base32ToUuid is case insensitive`, () => {
 		for (const [uuid, base32] of Object.entries(cases)) {
-			assert.equal(base32ToUuid(base32.toUpperCase()), uuid, `base32ToUuid uppercase failed for ${base32}`);
-			assert.equal(base32ToUuid(toMixedCase(base32)), uuid, `base32ToUuid mixed case failed for ${base32}`);
+			assert.equal(
+				base32ToUuid(base32.toUpperCase()),
+				uuid,
+				`base32ToUuid uppercase failed for ${base32}`,
+			);
+			assert.equal(
+				base32ToUuid(toMixedCase(base32)),
+				uuid,
+				`base32ToUuid mixed case failed for ${base32}`,
+			);
 		}
 	});
 
