@@ -1,5 +1,5 @@
 export { Id } from "./id.ts";
-export { Uuid } from "./uuid.ts";
+export { Uuid, uuidToBase32, base32ToUuid } from "./uuid.ts";
 export {
 	NominalIdError,
 	InvalidTagError,

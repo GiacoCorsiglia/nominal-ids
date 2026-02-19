@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { toMixedCase, uuidEdgeCases, uuidRandomCases, uuidv7Cases } from "./__test__/fixtures.ts";
 import { InvalidBase32CharacterError, InvalidUuidError } from "./errors.ts";
-import { Uuid } from "./uuid.ts";
+import { Uuid, uuidToBase32, base32ToUuid } from "./uuid.ts";
 
 class UserId extends Uuid.For("user") {}
 class PostId extends Uuid.For("post") {}
@@ -162,6 +162,21 @@ test("Supports uppercase base32 decoding", () => {
 	assert.equal(uuid.key, testHexWithHyphens);
 });
 
+// --- uuidToBase32 / base32ToUuid standalone functions ---
+
+test("uuidToBase32 converts hex UUID to base32", () => {
+	assert.equal(uuidToBase32(testHexWithHyphens), testBase32);
+});
+
+test("base32ToUuid converts base32 to hex UUID", () => {
+	assert.equal(base32ToUuid(testBase32), testHexWithHyphens);
+});
+
+test("uuidToBase32 and base32ToUuid round trip", () => {
+	assert.equal(base32ToUuid(uuidToBase32(testHexWithHyphens)), testHexWithHyphens);
+	assert.equal(uuidToBase32(base32ToUuid(testBase32)), testBase32);
+});
+
 // Comprehensive test suite using all fixtures
 for (const [name, cases] of [
 	["Edge cases", uuidEdgeCases],
@@ -189,6 +204,13 @@ for (const [name, cases] of [
 			assert.equal(fromBase32, fromUuid, `Failed round trip for ${uuid}`);
 			assert.equal(fromBase32.toString(), base32, `Failed base32 for ${uuid}`);
 			assert.equal(fromUuid.toString(), base32, `Failed base32 for ${uuid}`);
+		}
+	});
+
+	test(`${name} - uuidToBase32/base32ToUuid`, () => {
+		for (const [uuid, base32] of Object.entries(cases)) {
+			assert.equal(uuidToBase32(uuid), base32, `uuidToBase32 failed for ${uuid}`);
+			assert.equal(base32ToUuid(base32), uuid, `base32ToUuid failed for ${base32}`);
 		}
 	});
 

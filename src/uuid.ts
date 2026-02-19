@@ -159,6 +159,20 @@ interface TaggedUuidStatic<Tag extends string> extends TaggedIdStatic<Tag> {
 
 type TaggedUuidCls<Tag extends string> = typeof TaggedUuid<Tag> & TaggedUuidStatic<Tag>;
 
+/**
+ * Convert a UUID hex string (36 chars with hyphens) to a 26-char Crockford base32 string.
+ */
+export function uuidToBase32(uuid: string): string {
+	return encodeBase32(parseUuidHex(uuid));
+}
+
+/**
+ * Convert a 26-char Crockford base32 string to a hyphenated UUID hex string (36 chars).
+ */
+export function base32ToUuid(base32: string): string {
+	return formatUuidHex(decodeBase32(base32));
+}
+
 export class Uuid extends Id {
 	// The key is inherited from Id but is always a string (hyphenated hex UUID, 36 chars)
 	declare readonly key: string;

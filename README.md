@@ -55,6 +55,17 @@ session1.toBase32();   // "0c4bsevmp7a8621fq6tjgpr6"
 session1.toString();   // "session_0c4bsevmp7a8621fq6tjgpr6"
 ```
 
+### `uuidToBase32` / `base32ToUuid`
+
+Standalone conversion functions for when you need to convert between UUID formats without creating an interned `Uuid` instance:
+
+```typescript
+import { uuidToBase32, base32ToUuid } from 'nominal-ids';
+
+uuidToBase32("0188bac7-a64e-7a51-843c-441ad1d9cbc6");  // "01h2xcf9jef98r8f243b8xkjy6"
+base32ToUuid("01h2xcf9jef98r8f243b8xkjy6");             // "0188bac7-a64e-7a51-843c-441ad1d9cbc6"
+```
+
 ## Key Features
 
 ### Automatic Interning
