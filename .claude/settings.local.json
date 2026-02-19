@@ -6,7 +6,8 @@
       "WebSearch",
       "Bash(npm test:*)",
       "Bash(npm run typecheck:*)",
-      "Bash(npm run lint)"
+      "Bash(npm run lint)",
+      "Bash(node --test:*)"
     ]
   }
 }
