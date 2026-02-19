@@ -159,6 +159,17 @@ interface TaggedUuidStatic<Tag extends string> extends TaggedIdStatic<Tag> {
 
 type TaggedUuidCls<Tag extends string> = typeof TaggedUuid<Tag> & TaggedUuidStatic<Tag>;
 
+// Matches a 26-char Crockford base32 string that fits in 128 bits.
+// The first character must be 0-7 (top 2 bits zero) since 26×5 = 130 bits > 128 bits.
+const BASE32_UUID_RE = /^[0-7][0-9a-fghjkmnp-tv-z]{25}$/i;
+
+/**
+ * Test whether a string is a valid Crockford base32-encoded UUID (26 chars, 128 bits).
+ */
+export function isBase32Uuid(value: string): boolean {
+	return BASE32_UUID_RE.test(value);
+}
+
 /**
  * Convert a UUID hex string (36 chars with hyphens) to a 26-char Crockford base32 string.
  */

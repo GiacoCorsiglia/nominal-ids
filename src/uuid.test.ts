@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { toMixedCase, uuidEdgeCases, uuidRandomCases, uuidv7Cases } from "./__test__/fixtures.ts";
 import { InvalidBase32CharacterError, InvalidUuidError } from "./errors.ts";
-import { Uuid, uuidToBase32, base32ToUuid } from "./uuid.ts";
+import { Uuid, uuidToBase32, base32ToUuid, isBase32Uuid } from "./uuid.ts";
 
 class UserId extends Uuid.For("user") {}
 class PostId extends Uuid.For("post") {}
@@ -177,6 +177,47 @@ test("uuidToBase32 and base32ToUuid round trip", () => {
 	assert.equal(uuidToBase32(base32ToUuid(testBase32)), testBase32);
 });
 
+// --- isBase32Uuid ---
+
+test("isBase32Uuid accepts valid base32 UUIDs", () => {
+	assert.equal(isBase32Uuid(testBase32), true);
+	assert.equal(isBase32Uuid("00000000000000000000000000"), true);
+	assert.equal(isBase32Uuid("7zzzzzzzzzzzzzzzzzzzzzzzzz"), true);
+});
+
+test("isBase32Uuid accepts uppercase", () => {
+	assert.equal(isBase32Uuid(testBase32.toUpperCase()), true);
+});
+
+test("isBase32Uuid accepts mixed case", () => {
+	assert.equal(isBase32Uuid("01H2XCF9JEF98R8f243b8xkjy6"), true);
+});
+
+test("isBase32Uuid rejects wrong length", () => {
+	assert.equal(isBase32Uuid("01h2xcf9jef98r8f243b8xkjy"), false); // 25 chars
+	assert.equal(isBase32Uuid("01h2xcf9jef98r8f243b8xkjy67"), false); // 27 chars
+	assert.equal(isBase32Uuid(""), false);
+});
+
+test("isBase32Uuid rejects invalid characters", () => {
+	// 'u' is not in Crockford base32
+	assert.equal(isBase32Uuid("0c5pavn4ts6t2g1s891kest9su"), false);
+	// 'i', 'l', 'o' are excluded
+	assert.equal(isBase32Uuid("0i5pavn4ts6t2g1s891kest9ss"), false);
+	assert.equal(isBase32Uuid("0l5pavn4ts6t2g1s891kest9ss"), false);
+	assert.equal(isBase32Uuid("0o5pavn4ts6t2g1s891kest9ss"), false);
+});
+
+test("isBase32Uuid rejects first char > 7 (overflow)", () => {
+	// '8' as first char means top 2 bits are non-zero → >128 bits
+	assert.equal(isBase32Uuid("80000000000000000000000000"), false);
+	assert.equal(isBase32Uuid("z0000000000000000000000000"), false);
+});
+
+test("isBase32Uuid rejects hex UUIDs", () => {
+	assert.equal(isBase32Uuid(testHexWithHyphens), false);
+});
+
 // Comprehensive test suite using all fixtures
 for (const [name, cases] of [
 	["Edge cases", uuidEdgeCases],
@@ -219,6 +260,14 @@ for (const [name, cases] of [
 			const result = Uuid.from(base32.toUpperCase());
 			assert.equal(result.key, uuid, `Failed for uppercase base32: ${base32}`);
 			assert.equal(result.toString(), base32, `Failed encoding for uppercase base32: ${base32}`);
+		}
+	});
+
+	test(`${name} - isBase32Uuid accepts base32, rejects hex`, () => {
+		for (const [uuid, base32] of Object.entries(cases)) {
+			assert.equal(isBase32Uuid(base32), true, `Should accept base32: ${base32}`);
+			assert.equal(isBase32Uuid(base32.toUpperCase()), true, `Should accept uppercase: ${base32}`);
+			assert.equal(isBase32Uuid(uuid), false, `Should reject hex UUID: ${uuid}`);
 		}
 	});
 
