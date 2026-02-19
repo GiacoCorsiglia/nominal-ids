@@ -1,6 +1,6 @@
 {
   "name": "nominal-ids",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Nominal ID classes for TypeScript",
   "license": "MIT",
   "author": {
